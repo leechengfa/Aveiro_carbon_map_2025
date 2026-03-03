@@ -1,0 +1,49 @@
+---
+title: "Predicted seagrass carbon map at Ria de Aveiro for 2024 and 2025"
+author: "Lee, Chengfa Benjamin"
+date: "`r Sys.Date()`"
+output: bookdown::html_document2
+bibliography: references.bib 
+editor_options:
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(magrittr)
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggiraph)
+library(ggpubr)
+library(patchwork)
+```
+
+This page documents the results of the _Zostera noltii_ seagrass carbon mapping work at Ria de Aviero. This includes work done in:
+
+* [The fieldtrip of Aveiro 2025](https://sigoiry.github.io/Spectra_Aveiro_2025/) by [Simon Oiry](https://github.com/SigOiry)
+* [Coring Carbon Seagrass](https://sigoiry.github.io/Coring_Carbon_Seagrasses/) by Simon Oiry
+* [Exploring the relationship between seagrass reflectance and biomass](https://leechengfa.github.io/Seagrass_reflectance_biomass_2025.github.io/) by C. Benjamin Lee
+
+All analyses were performed in R version 4.5.2 [@Rversion].
+All work belong to the [REWRITE project](https://rewriteproject.eu/).
+
+# Study Location
+
+This page focuses on Ria de Aveiro, a [demonstrator site for the REWRITE PROJECT](https://rewriteproject.eu/demonstrator-network/ria-de-aveiro). A natural site and rewilded site was designated in the lagoon and seagrass meadows were found in both sites. Its seagrass meadow was estimated to be 3.52 km^2^ during the peak season of 2024 [@davies2024].
+
+<!-- use the .shp files + learn leaflet or something to show the .shp -->
+
+# ICE CREAMS Model prediction
+
+NDVI and seagrass maps
+
+
+
+
+
+
+
+
