@@ -12,20 +12,23 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE)
 
 library(magrittr)
-library(readxl)
+library(sf)
 library(dplyr)
-library(tidyr)
-library(ggplot2)
-library(ggiraph)
-library(ggpubr)
-library(patchwork)
+library(leaflet)
+library(terra)
+# library(readxl)
+# library(tidyr)
+# library(ggplot2)
+# library(ggiraph)
+# library(ggpubr)
+# library(patchwork)
 ```
 
 This page documents the results of the _Zostera noltii_ seagrass carbon mapping work at Ria de Aviero. This includes work done in:
 
 * [The fieldtrip of Aveiro 2025](https://sigoiry.github.io/Spectra_Aveiro_2025/) by [Simon Oiry](https://github.com/SigOiry)
 * [Coring Carbon Seagrass](https://sigoiry.github.io/Coring_Carbon_Seagrasses/) by Simon Oiry
-* [Exploring the relationship between seagrass reflectance and biomass](https://leechengfa.github.io/Seagrass_reflectance_biomass_2025.github.io/) by C. Benjamin Lee
+* [Exploring the relationship between seagrass reflectance and biomass](https://leechengfa.github.io/Seagrass_reflectance_biomass_2025.github.io/)
 
 All analyses were performed in R version 4.5.2 [@Rversion].
 All work belong to the [REWRITE project](https://rewriteproject.eu/).
@@ -34,13 +37,240 @@ All work belong to the [REWRITE project](https://rewriteproject.eu/).
 
 This page focuses on Ria de Aveiro, a [demonstrator site for the REWRITE PROJECT](https://rewriteproject.eu/demonstrator-network/ria-de-aveiro). A natural site and rewilded site was designated in the lagoon and seagrass meadows were found in both sites. Its seagrass meadow was estimated to be 3.52 km^2^ during the peak season of 2024 [@davies2024].
 
-<!-- use the .shp files + learn leaflet or something to show the .shp -->
+The sites were sampled according to a grid, and additional stations were sampled randomly within the grid.
+
+```{r samplingDesign}
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+
+stations <- read_sf('data/shp/Points.shp') %>%
+  filter(!is.na(seagrassA)) %>%
+  select(name, type, site, habitat, longitude, latitude)
+
+map_centre <- stations %>% 
+  st_union() %>%
+  st_centroid() %>%
+  st_coordinates()
+
+pal.shp <- colorFactor(c('darkgreen','pink4'), domain = c('natural','rewilded'))
+
+m.shp <- leaflet(stations) %>%
+  addTiles() %>%
+  setView(map_centre[1], map_centre[2], 14) %>%
+  addCircleMarkers(radius = 2, color = ~pal.shp(site), fillOpacity = 1, label = ~name) %>%
+  addLegend(pal = pal.shp, values = ~site, opacity = 1)
+
+m.shp
+```
 
 # ICE CREAMS Model prediction
 
-NDVI and seagrass maps
+ICE CREAMS classification
+
+```{r icecreams}
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+
+import.icecreams <- function(image.path) {
+  map.ice <- rast(image.path)
+    map.ice[map.ice == 0 | map.ice == -1] <- NA
+    
+  return(map.ice)
+}
+
+pal.icecreams <- c('khaki','slategrey','lightgreen','darkgreen','aquamarine','brown','red','darkblue','yellowgreen')
+labels.icecreams <- c("Bare Sand","Bare Sediment","Chlorophyta","Magnoliopsida","Microphytobenthos","Phaeophyceae","Rhodophyta","Water","Xanthophyceae")
+
+map.class <- import.icecreams('data/ice_creams_prediction/S2C_MSIL2A_20250715T113341_N0511_R080_T29TNF_20250715T165315_Pred_BFRD_V1_3.tif')
+  levels(map.class$Out_Class) <- data.frame(id=1:9, cover = labels.icecreams)
+
+pal.class <- colorFactor(pal.icecreams, domain = 1:9, na.color = "transparent")
+
+m.class <- leaflet() %>%
+  addTiles() %>%
+  setView(map_centre[1], map_centre[2], 12) %>%
+  addRasterImage(map.class, colors = pal.class) %>%
+  addLegend(colors = pal.icecreams, values = 1:9, labels = labels.icecreams, opacity = 1)
+m.class
+```
+
+Sentinel-2 NDVI Map
+
+```{r ndvi}
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+
+import.ndvi <- function(image.path) {
+  map.index <- rast(image.path)
+  
+  return(map.index)
+}
+
+map.ndvi <- import.ndvi('data/ndvi/S2C_MSIL2A_20250715T113341_N0511_R080_T29TNF_20250715T165315_ndvi.tif')
+
+pal.ndvi <- colorNumeric(c('red','white','green'), domain = c(-1, 0, 1), na.color = "transparent")
+
+m.ndvi <- leaflet() %>%
+  addTiles() %>%
+  setView(map_centre[1], map_centre[2], 12) %>%
+  addRasterImage(map.ndvi, colors = pal.ndvi) %>%
+  addLegend(pal = pal.ndvi, values = c(-1, 0, 1), opacity = 1)
+m.ndvi
+```
+
+# Biomass prediction 
+
+Rewilded vs Natural, Averaged results for the mapping
+
+```{r predictedbiomass}
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+
+derive.agb <- function(ndvi) {
+  agb <- ndvi * 140 - 9.5
+    agb[agb < 0] <- 0
+  
+  return(mask(agb, map.class$Out_Class, inverse = TRUE, maskvalues = 4))
+}
+
+map.agb <- derive.agb(map.ndvi)
+
+derive.bgb <- function(agb) {
+  bgb <- agb * 0.69 + 9.1
+    bgb[agb == 0] <- 0
+  
+  return(bgb)
+}
+
+map.bgb <- derive.bgb(map.agb)
+
+## calculate AGB and BGB over area --> sum? // take care of units (g/m2) // how to account for this with S2?? (10m not 1m // 100m2 not 1m2)
+## conversion to tons/ha (multiply by 10 and divide by 1000)
+biomass.agb <- global(map.agb, fun = 'sum', na.rm = TRUE) * 10 / 1000
+biomass.bgb <- global(map.bgb, fun = 'sum', na.rm = TRUE) * 10 / 1000
+
+## shared palette
+pal.biomass <- colorNumeric(c('white','black'), domain = c(0, 70), na.color = 'transparent')
+```
+
+Total AGB in kg/ha: `r round(biomass.agb$sum, 2) %>% format(scientific = FALSE)`
+
+```{r mapAGB}
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+
+m.agb <- leaflet() %>%
+  addTiles() %>%
+  setView(map_centre[1], map_centre[2], 13) %>%
+  addRasterImage(map.agb, colors = pal.biomass) %>%
+  addLegend(pal = pal.biomass, values = c(0, 70), opacity = 1)
+m.agb
+```
+
+Total BGB in kg/ha: `r round(biomass.bgb$sum, 2) %>% format(scientific = FALSE)`
+BGB map derived from general relationship between AGB and BGB.
+
+```{r mapBGB}
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+
+m.bgb <- leaflet() %>%
+  addTiles() %>%
+  setView(map_centre[1], map_centre[2], 12) %>%
+  addRasterImage(map.bgb, colors = pal.biomass) %>%
+  addLegend(pal = pal.biomass, values = c(0, 70), opacity = 1)
+m.bgb
+```
 
 
+# Carbon stock prediction
+
+Maps and estimated total stock in Ria de Aveiro. 
+
+```{r predictedcarbonstock}
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+
+## g/m2 * g/g --> g as output
+aveiro.carbon.leaf.factor <- 0.2870144
+derive.carbon.leaf <- function(map.biomass.leaf) {
+  map.biomass.leaf * aveiro.carbon.leaf.factor
+}
+
+map.agc <- derive.carbon.leaf(map.agb)
+
+pal.carbon <- colorNumeric(c('white','black'), domain = c(0, 50), na.color = 'transparent')
+
+## g/m2 * g/g --> g as output
+aveiro.carbon.root.factor <- 0.252088
+derive.carbon.root <- function(map.biomass.root) {
+  map.biomass.root * aveiro.carbon.root.factor
+}
+
+map.bgc <- derive.carbon.leaf(map.bgb)
+
+## conversion to kg (divide by 1000)
+carbon.agc <- global(map.agc, fun = 'sum', na.rm = TRUE) / 1000
+carbon.bgc <- global(map.bgc, fun = 'sum', na.rm = TRUE) / 1000
+```
+
+
+Average leaf carbon content factor for Aveiro = `r round(aveiro.carbon.leaf.factor, 3)`
+
+AGB carbon stock in Aveiro (kg) = `r round(carbon.agc, 3)`
+
+```{r mapAGC}
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+
+m.agc <- leaflet() %>%
+  addTiles() %>%
+  setView(map_centre[1], map_centre[2], 13) %>%
+  addRasterImage(map.agc, colors = pal.carbon) %>%
+  addLegend(pal = pal.biomass, values = c(0, 50), opacity = 1)
+m.agc
+```
+
+Average root carbon content factor for Aveiro = `r round(aveiro.carbon.root.factor, 3)`
+
+BGB carbon stock in Aveiro (kg) = `r round(carbon.bgc, 3)`
+
+```{r mapBGC}
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+
+m.bgc <- leaflet() %>%
+  addTiles() %>%
+  setView(map_centre[1], map_centre[2], 13) %>%
+  addRasterImage(map.bgc, colors = pal.carbon) %>%
+  addLegend(pal = pal.biomass, values = c(0, 50), opacity = 1)
+m.bgc
+```
+
+<!-- Soil carbon is still a missing gap -->
+
+
+# (Optional) Phenology
+
+Seagrass phenology, biomass, carbon stock
 
 
 
