@@ -57,7 +57,7 @@ map_centre <- stations %>%
 pal.shp <- colorFactor(c('darkgreen','pink4'), domain = c('natural','rewilded'))
 
 m.shp <- leaflet(stations) %>%
-  addTiles() %>%
+  addProviderTiles(providers$CartoDB.PositronNoLabels) %>%
   setView(map_centre[1], map_centre[2], 14) %>%
   addCircleMarkers(radius = 2, color = ~pal.shp(site), fillOpacity = 1, label = ~name) %>%
   addLegend(pal = pal.shp, values = ~site, opacity = 1)
@@ -82,7 +82,7 @@ import.icecreams <- function(image.path) {
   return(map.ice)
 }
 
-pal.icecreams <- c('khaki','slategrey','lightgreen','darkgreen','aquamarine','brown','red','darkblue','yellowgreen')
+pal.icecreams <- c('#ded4c3','#926e62','#c6c97c','#8ca271','#ddac74','#a9665e','#ca474f','#9ec8c7','#b8dc70')
 labels.icecreams <- c("Bare Sand","Bare Sediment","Chlorophyta","Magnoliopsida","Microphytobenthos","Phaeophyceae","Rhodophyta","Water","Xanthophyceae")
 
 map.class <- import.icecreams('data/ice_creams_prediction/S2C_MSIL2A_20250715T113341_N0511_R080_T29TNF_20250715T165315_Pred_BFRD_V1_3.tif')
@@ -91,11 +91,29 @@ map.class <- import.icecreams('data/ice_creams_prediction/S2C_MSIL2A_20250715T11
 pal.class <- colorFactor(pal.icecreams, domain = 1:9, na.color = "transparent")
 
 m.class <- leaflet() %>%
-  addTiles() %>%
+  addProviderTiles(providers$CartoDB.PositronNoLabels) %>%
   setView(map_centre[1], map_centre[2], 12) %>%
   addRasterImage(map.class, colors = pal.class) %>%
   addLegend(colors = pal.icecreams, values = 1:9, labels = labels.icecreams, opacity = 1)
 m.class
+```
+
+```{r icecreamsseagrass}
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+
+map.class.seagrass <- map.class
+  map.class.seagrass$Out_Class[map.class.seagrass$Out_Class != 4] <- NA
+  levels(map.class.seagrass$Out_Class) <- data.frame(id=4, cover = labels.icecreams[4])
+
+m.class.sg <- leaflet() %>%
+  addProviderTiles(providers$CartoDB.PositronNoLabels) %>%
+  setView(map_centre[1], map_centre[2], 12) %>%
+  addRasterImage(map.class.seagrass, colors = pal.icecreams[4]) %>%
+  addLegend(colors = pal.icecreams[4], values = 4, labels = labels.icecreams[4], opacity = 1)
+m.class.sg
 ```
 
 Sentinel-2 NDVI Map
@@ -114,13 +132,116 @@ import.ndvi <- function(image.path) {
 
 map.ndvi <- import.ndvi('data/ndvi/S2C_MSIL2A_20250715T113341_N0511_R080_T29TNF_20250715T165315_ndvi.tif')
 
-pal.ndvi <- colorNumeric(c('red','white','green'), domain = c(-1, 0, 1), na.color = "transparent")
+pal.ndvi <- colorNumeric(c('white','green'), domain = c(0, 1), na.color = "transparent")
+
+## function copied from stackoverflow
+## https://stackoverflow.com/questions/40276569/reverse-order-in-r-leaflet-continuous-legend
+addLegend_decreasing <- function (map, position = c("topright", "bottomright", "bottomleft","topleft"),
+                                  pal, values, na.label = "NA", bins = 7, colors, 
+                                  opacity = 0.5, labels = NULL, labFormat = labelFormat(), 
+                                  title = NULL, className = "info legend", layerId = NULL, 
+                                  group = NULL, data = getMapData(map), decreasing = FALSE) {
+  
+        position <- match.arg(position)
+        type <- "unknown"
+        na.color <- NULL
+        extra <- NULL
+        if (!missing(pal)) {
+            if (!missing(colors)) 
+                stop("You must provide either 'pal' or 'colors' (not both)")
+            if (missing(title) && inherits(values, "formula")) 
+                title <- deparse(values[[2]])
+            values <- evalFormula(values, data)
+            type <- attr(pal, "colorType", exact = TRUE)
+            args <- attr(pal, "colorArgs", exact = TRUE)
+            na.color <- args$na.color
+            if (!is.null(na.color) && col2rgb(na.color, alpha = TRUE)[[4]] == 
+                    0) {
+                na.color <- NULL
+            }
+            if (type != "numeric" && !missing(bins)) 
+                warning("'bins' is ignored because the palette type is not numeric")
+            if (type == "numeric") {
+                cuts <- if (length(bins) == 1) 
+                    pretty(values, bins)
+                else bins   
+                if (length(bins) > 2) 
+                    if (!all(abs(diff(bins, differences = 2)) <= 
+                                     sqrt(.Machine$double.eps))) 
+                        stop("The vector of breaks 'bins' must be equally spaced")
+                n <- length(cuts)
+                r <- range(values, na.rm = TRUE)
+                cuts <- cuts[cuts >= r[1] & cuts <= r[2]]
+                n <- length(cuts)
+                p <- (cuts - r[1])/(r[2] - r[1])
+                extra <- list(p_1 = p[1], p_n = p[n])
+                p <- c("", paste0(100 * p, "%"), "")
+                if (decreasing == TRUE){
+                    colors <- pal(rev(c(r[1], cuts, r[2])))
+                    labels <- rev(labFormat(type = "numeric", cuts))
+                }else{
+                    colors <- pal(c(r[1], cuts, r[2]))
+                    labels <- rev(labFormat(type = "numeric", cuts))
+                }
+                colors <- paste(colors, p, sep = " ", collapse = ", ")
+            }
+            else if (type == "bin") {
+                cuts <- args$bins
+                n <- length(cuts)
+                mids <- (cuts[-1] + cuts[-n])/2
+                if (decreasing == TRUE){
+                    colors <- pal(rev(mids))
+                    labels <- rev(labFormat(type = "bin", cuts))
+                }else{
+                    colors <- pal(mids)
+                    labels <- labFormat(type = "bin", cuts)
+                }
+            }
+            else if (type == "quantile") {
+                p <- args$probs
+                n <- length(p)
+                cuts <- quantile(values, probs = p, na.rm = TRUE)
+                mids <- quantile(values, probs = (p[-1] + p[-n])/2, na.rm = TRUE)
+                if (decreasing == TRUE){
+                    colors <- pal(rev(mids))
+                    labels <- rev(labFormat(type = "quantile", cuts, p))
+                }else{
+                    colors <- pal(mids)
+                    labels <- labFormat(type = "quantile", cuts, p)
+                }
+            }
+            else if (type == "factor") {
+                v <- sort(unique(na.omit(values)))
+                colors <- pal(v)
+                labels <- labFormat(type = "factor", v)
+                if (decreasing == TRUE){
+                    colors <- pal(rev(v))
+                    labels <- rev(labFormat(type = "factor", v))
+                }else{
+                    colors <- pal(v)
+                    labels <- labFormat(type = "factor", v)
+                }
+            }
+            else stop("Palette function not supported")
+            if (!any(is.na(values))) 
+                na.color <- NULL
+        }
+        else {
+            if (length(colors) != length(labels)) 
+                stop("'colors' and 'labels' must be of the same length")
+        }
+        legend <- list(colors = I(unname(colors)), labels = I(unname(labels)), 
+                                     na_color = na.color, na_label = na.label, opacity = opacity, 
+                                     position = position, type = type, title = title, extra = extra, 
+                                     layerId = layerId, className = className, group = group)
+        invokeMethod(map, data, "addLegend", legend)
+        }
 
 m.ndvi <- leaflet() %>%
-  addTiles() %>%
+  addProviderTiles(providers$CartoDB.PositronNoLabels) %>%
   setView(map_centre[1], map_centre[2], 12) %>%
   addRasterImage(map.ndvi, colors = pal.ndvi) %>%
-  addLegend(pal = pal.ndvi, values = c(-1, 0, 1), opacity = 1)
+  addLegend_decreasing(pal = pal.ndvi, values = c(0, 1), opacity = 1, decreasing = TRUE)
 m.ndvi
 ```
 
@@ -152,16 +273,15 @@ derive.bgb <- function(agb) {
 
 map.bgb <- derive.bgb(map.agb)
 
-## calculate AGB and BGB over area --> sum? // take care of units (g/m2) // how to account for this with S2?? (10m not 1m // 100m2 not 1m2)
-## conversion to tons/ha (multiply by 10 and divide by 1000)
-biomass.agb <- global(map.agb, fun = 'sum', na.rm = TRUE) * 10 / 1000
-biomass.bgb <- global(map.bgb, fun = 'sum', na.rm = TRUE) * 10 / 1000
+## calculate AGB and BGB over unit area (g/m2) 
+## conversion first to stock by multiplying by pixel area of Sentinel-2
+## then conversion to kg per ha (multiply by 10 and divide by 1000)
+biomass.agb <- global(map.agb, fun = 'sum', na.rm = TRUE) * 100 * 10 / 1000
+biomass.bgb <- global(map.bgb, fun = 'sum', na.rm = TRUE) * 100 * 10 / 1000
 
 ## shared palette
 pal.biomass <- colorNumeric(c('white','black'), domain = c(0, 70), na.color = 'transparent')
 ```
-
-Total AGB in kg/ha: `r round(biomass.agb$sum, 2) %>% format(scientific = FALSE)`
 
 ```{r mapAGB}
 #| echo: false
@@ -170,14 +290,13 @@ Total AGB in kg/ha: `r round(biomass.agb$sum, 2) %>% format(scientific = FALSE)`
 #| warning: false
 
 m.agb <- leaflet() %>%
-  addTiles() %>%
+  addProviderTiles(providers$CartoDB.PositronNoLabels) %>%
   setView(map_centre[1], map_centre[2], 13) %>%
   addRasterImage(map.agb, colors = pal.biomass) %>%
-  addLegend(pal = pal.biomass, values = c(0, 70), opacity = 1)
+  addLegend_decreasing(pal = pal.biomass, values = c(0, 70), opacity = 1, decreasing = TRUE)
 m.agb
 ```
 
-Total BGB in kg/ha: `r round(biomass.bgb$sum, 2) %>% format(scientific = FALSE)`
 BGB map derived from general relationship between AGB and BGB.
 
 ```{r mapBGB}
@@ -187,17 +306,15 @@ BGB map derived from general relationship between AGB and BGB.
 #| warning: false
 
 m.bgb <- leaflet() %>%
-  addTiles() %>%
+  addProviderTiles(providers$CartoDB.PositronNoLabels) %>%
   setView(map_centre[1], map_centre[2], 12) %>%
   addRasterImage(map.bgb, colors = pal.biomass) %>%
-  addLegend(pal = pal.biomass, values = c(0, 70), opacity = 1)
+  addLegend_decreasing(pal = pal.biomass, values = c(0, 70), opacity = 1, decreasing = TRUE)
 m.bgb
 ```
 
 
 # Carbon stock prediction
-
-Maps and estimated total stock in Ria de Aveiro. 
 
 ```{r predictedcarbonstock}
 #| echo: false
@@ -223,57 +340,96 @@ derive.carbon.root <- function(map.biomass.root) {
 
 map.bgc <- derive.carbon.leaf(map.bgb)
 
-## conversion to kg (divide by 1000)
-carbon.agc <- global(map.agc, fun = 'sum', na.rm = TRUE) / 1000
-carbon.bgc <- global(map.bgc, fun = 'sum', na.rm = TRUE) / 1000
-```
-
-
-Average leaf carbon content factor for Aveiro = `r round(aveiro.carbon.leaf.factor, 3)`
-
-AGB carbon stock in Aveiro (kg) = `r round(carbon.agc, 3)`
-
-```{r mapAGC}
-#| echo: false
-#| error: false
-#| message: false
-#| warning: false
-
-m.agc <- leaflet() %>%
-  addTiles() %>%
-  setView(map_centre[1], map_centre[2], 13) %>%
-  addRasterImage(map.agc, colors = pal.carbon) %>%
-  addLegend(pal = pal.biomass, values = c(0, 50), opacity = 1)
-m.agc
-```
-
-Average root carbon content factor for Aveiro = `r round(aveiro.carbon.root.factor, 3)`
-
-BGB carbon stock in Aveiro (kg) = `r round(carbon.bgc, 3)`
-
-```{r mapBGC}
-#| echo: false
-#| error: false
-#| message: false
-#| warning: false
-
-m.bgc <- leaflet() %>%
-  addTiles() %>%
-  setView(map_centre[1], map_centre[2], 13) %>%
-  addRasterImage(map.bgc, colors = pal.carbon) %>%
-  addLegend(pal = pal.biomass, values = c(0, 50), opacity = 1)
-m.bgc
+## conversion to ton (divide by 1,000,000)
+carbon.agc <- global(map.agc, fun = 'sum', na.rm = TRUE) / 1000000
+carbon.bgc <- global(map.bgc, fun = 'sum', na.rm = TRUE) / 1000000
 ```
 
 <!-- Soil carbon is still a missing gap -->
 
+```{r biomassCarbonTable}
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
 
-# (Optional) Phenology
+table.bc <- data.frame(
+    list(
+      "component" = c('Aboveground', 'Belowground', 'Soil'),
+      "surface_area" = rep(global(map.class.seagrass$Out_Class, fun = 'sum', na.rm = TRUE) / 4 * 100, 3) %>% unlist(),
+      "biomass_per_area" = c(round(biomass.agb$sum, 2) %>% format(scientific = FALSE), round(biomass.bgb$sum, 2) %>% format(scientific = FALSE), 'NA'),
+      "biomass" = c('Highly variable seagrass presence/cover', 'Consistently dense', 'NA'),
+      "carbon_content" = c(round(aveiro.carbon.leaf.factor, 3), round(aveiro.carbon.root.factor, 3), 'NA'),
+      "carbon_per_area" = c('agb_total_area', 'bgb_total_area', 'NA'),
+      "carbon_stock" = c(round(carbon.agc$sum, 3), round(carbon.bgc$sum, 3), 'NA')
+    )) 
+
+names(table.bc) <- c("Component", "Total surface area<br>(m^2^)", "Total biomass per area<br>(kg DW/ha)", "Total biomass<br>(kg DW)", "Carbon content<br>(g C/g DW)", "Carbon stock per area<br>(kg C/m^2^)", "Total carbon stock<br>(ton)")
+
+knitr::kable(table.bc, 
+             format = "pipe",
+             align = 'c',
+             caption = 'Seagrass biomass and carbon at Ria de Aveiro. "DW" denotes the dry weight of the seagrass samples while "C" denotes the carbon in the seagrass samples.')
+```
+
+
+
+# Phenology
 
 Seagrass phenology, biomass, carbon stock
 
+```{r phenologyCalculations}
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+
+# phenology <- data.frame(list(
+#   "tile.name" = list.files('data/ice_creams_prediction') %>%
+#     gsub('_Pred_BFRD_V1_3.tif', '', .)
+# ))
+#   phenology$date <- lapply(phenology$tile.name, FUN = function(string) {
+#     x <- string %>%
+#       strsplit("_") %>%
+#       unlist() %>%
+#       "["(3) %>%
+#       strsplit("T") %>%
+#       unlist() %>%
+#       "["(1)
+#     
+#     return(x)
+#   }) %>% unlist() %>% as.Date('%Y%m%d')
+#   phenology$surface_area <- NA
+#   phenology$agb_per_area <- NA
+#   phenology$bgb_per_area <- NA
+#   phenology$agb_total <- NA
+#   phenology$bgb_total <- NA
+#   phenology$agc_per_area <- NA
+#   phenology$bgc_per_area <- NA
+#   phenology$agc_total <- NA
+#   phenology$bgc_total <- NA
+# 
+# for (n in phenology$tile.name) {
+#   pheno.class <- list.files('data/ice_creams_prediction', full.names = TRUE) %>%
+#     grep(n, ., value = TRUE) %>%
+#     import.icecreams() 
+#     levels(pheno.class$Out_Class) <- data.frame(id=1:9, cover = labels.icecreams)
+#     
+#   pheno.class.seagrass <- pheno.class$Out_Class
+#     pheno.class.seagrass[pheno.class.seagrass != 4] <- NA
+#       levels(pheno.class.seagrass) <- data.frame(id=4, cover = labels.icecreams[4])
+#   phenology$surface_area[phenology$tile.name == n] <- global(pheno.class.seagrass, fun = 'sum', na.rm = TRUE) / 4 * 100
+#   
+#   pheno.ndvi <- list.files('data/ndvi', full.names = TRUE) %>%
+#     grep(n, ., value = TRUE) %>%
+#     import.icecreams()
+#   
+#   
+# }
+
+```
 
 
 
 
-
+# Reference
