@@ -275,9 +275,9 @@ map.bgb <- derive.bgb(map.agb)
 
 ## calculate AGB and BGB over unit area (g/m2) 
 ## conversion first to stock by multiplying by pixel area of Sentinel-2
-## then conversion to kg per ha (multiply by 10 and divide by 1000)
-biomass.agb <- global(map.agb, fun = 'sum', na.rm = TRUE) * 100 * 10 / 1000
-biomass.bgb <- global(map.bgb, fun = 'sum', na.rm = TRUE) * 100 * 10 / 1000
+## then conversion to kg per ha (multiply by 100 and divide by 1000)
+biomass.agb <- global(map.agb, fun = 'sum', na.rm = TRUE) * 100 * 100 / 1000
+biomass.bgb <- global(map.bgb, fun = 'sum', na.rm = TRUE) * 100 * 100 / 1000
 
 ## shared palette
 pal.biomass <- colorNumeric(c('white','black'), domain = c(0, 70), na.color = 'transparent')
@@ -340,9 +340,9 @@ derive.carbon.root <- function(map.biomass.root) {
 
 map.bgc <- derive.carbon.leaf(map.bgb)
 
-## conversion to ton (divide by 1,000,000)
-carbon.agc <- global(map.agc, fun = 'sum', na.rm = TRUE) / 1000000
-carbon.bgc <- global(map.bgc, fun = 'sum', na.rm = TRUE) / 1000000
+## conversion to kg (divide by 1,000,000)
+carbon.agc <- global(map.agc, fun = 'sum', na.rm = TRUE) / 1000
+carbon.bgc <- global(map.bgc, fun = 'sum', na.rm = TRUE) / 1000
 ```
 
 <!-- Soil carbon is still a missing gap -->
@@ -353,15 +353,17 @@ carbon.bgc <- global(map.bgc, fun = 'sum', na.rm = TRUE) / 1000000
 #| message: false
 #| warning: false
 
+area.seagrass <- global(map.class.seagrass$Out_Class, fun = 'sum', na.rm = TRUE) / 4 * 100
+
 table.bc <- data.frame(
     list(
       "component" = c('Aboveground', 'Belowground', 'Soil'),
-      "surface_area" = rep(global(map.class.seagrass$Out_Class, fun = 'sum', na.rm = TRUE) / 4 * 100, 3) %>% unlist(),
+      "surface_area" = rep(area.seagrass, 3) %>% unlist(),
       "biomass_per_area" = c(round(biomass.agb$sum, 2) %>% format(scientific = FALSE), round(biomass.bgb$sum, 2) %>% format(scientific = FALSE), 'NA'),
-      "biomass" = c('Highly variable seagrass presence/cover', 'Consistently dense', 'NA'),
+      "biomass" = c(round(biomass.agb$sum * 100, 2) %>% format(scientific = FALSE), round(biomass.bgb$sum* 100, 2) %>% format(scientific = FALSE), 'NA'),
       "carbon_content" = c(round(aveiro.carbon.leaf.factor, 3), round(aveiro.carbon.root.factor, 3), 'NA'),
-      "carbon_per_area" = c('agb_total_area', 'bgb_total_area', 'NA'),
-      "carbon_stock" = c(round(carbon.agc$sum, 3), round(carbon.bgc$sum, 3), 'NA')
+      "carbon_per_area" = c(round(unlist(carbon.agc$sum), 3) %>% format(scientific = FALSE), round(unlist(carbon.bgc$sum), 3) %>% format(scientific = FALSE), 'NA'),
+      "carbon_stock" = c(round(unlist(carbon.agc$sum / 1000), 3), round(unlist(carbon.bgc$sum / 1000), 3), 'NA')
     )) 
 
 names(table.bc) <- c("Component", "Total surface area<br>(m^2^)", "Total biomass per area<br>(kg DW/ha)", "Total biomass<br>(kg DW)", "Carbon content<br>(g C/g DW)", "Carbon stock per area<br>(kg C/m^2^)", "Total carbon stock<br>(ton)")
@@ -396,7 +398,7 @@ Seagrass phenology, biomass, carbon stock
 #       strsplit("T") %>%
 #       unlist() %>%
 #       "["(1)
-#     
+# 
 #     return(x)
 #   }) %>% unlist() %>% as.Date('%Y%m%d')
 #   phenology$surface_area <- NA
@@ -412,17 +414,22 @@ Seagrass phenology, biomass, carbon stock
 # for (n in phenology$tile.name) {
 #   pheno.class <- list.files('data/ice_creams_prediction', full.names = TRUE) %>%
 #     grep(n, ., value = TRUE) %>%
-#     import.icecreams() 
+#     import.icecreams()
 #     levels(pheno.class$Out_Class) <- data.frame(id=1:9, cover = labels.icecreams)
-#     
+# 
 #   pheno.class.seagrass <- pheno.class$Out_Class
 #     pheno.class.seagrass[pheno.class.seagrass != 4] <- NA
 #       levels(pheno.class.seagrass) <- data.frame(id=4, cover = labels.icecreams[4])
 #   phenology$surface_area[phenology$tile.name == n] <- global(pheno.class.seagrass, fun = 'sum', na.rm = TRUE) / 4 * 100
-#   
+# 
 #   pheno.ndvi <- list.files('data/ndvi', full.names = TRUE) %>%
 #     grep(n, ., value = TRUE) %>%
 #     import.icecreams()
+# 
+#   pheno.agb <- derive.agb(pheno.ndvi)
+#   pheno.bgb <- derive.bgb(pheno.agb)
+#   pheno.agc <- derive.carbon.leaf(pheno.agb)
+#   pheno.bgc <- derive.carbon.root(pheno.bgb)
 #   
 #   
 # }
