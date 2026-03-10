@@ -16,6 +16,7 @@ library(sf)
 library(dplyr)
 library(tidyr)
 library(leaflet)
+library(viridis)
 library(terra)
 library(ggplot2)
 ```
@@ -131,16 +132,26 @@ for (n in phenology$tile.name) {
 phenology$ndvi.mean <- unlist(phenology$ndvi.mean)
 phenology$ndvi.sd <- unlist(phenology$ndvi.sd)
 
-ggplot(phenology, aes(x = date, y = ndvi.mean, colour = NA)) +
+phenology$year <- format(phenology$date,"%Y") %>% 
+  as.character()
+phenology$daymonth <- format(phenology$date,"%d-%m") %>% 
+  as.character() %>%
+  as.Date("%d-%m")
+
+ggplot(phenology, aes(x = daymonth, y = ndvi.mean, colour = NA)) +
   # geom_ribbon(aes(ymin = ndvi.mean - ndvi.sd, ymax = ndvi.mean + ndvi.sd), alpha = 0.5) +
-  geom_vline(xintercept = as.Date('20250715', '%Y%m%d'), colour = 'red', linetype = 2, linewidth = 1) +
-  geom_line(aes(colour = 'Sentinel-2 derived'), linewidth = 1) +
-  geom_smooth(aes(colour = 'ggplot2 smoothed')) + 
-  xlab('Date') + ylab('Mean NDVI over seagrass pixels') +
+  geom_vline(xintercept = format(as.Date('20250715', '%Y%m%d'), "%d-%m") %>% as.character() %>% as.Date("%d-%m"), colour = 'red', linetype = 2, linewidth = 1) +
+  # geom_vline(xintercept = as.Date('20250715', '%Y%m%d'), colour = 'red', linetype = 2, linewidth = 1) +
+  geom_point(aes(colour = year)) +
+  geom_smooth(aes(colour = 'Smoothed trend')) + 
+  scale_x_date(breaks = '1 month', date_labels = '%d %b') + 
+  xlab('Calendar date') + ylab('Mean NDVI over seagrass pixels') +
   # manual legend creation 
-  scale_colour_manual('Time Trend', values = c('Sentinel-2 derived' = 'black', 'ggplot2 smoothed' = 'blue')) +
+  scale_colour_manual('Legend', values = c('2024' = 'navy', '2025' = 'orange', 'Smoothed trend' = 'blue')) +
   theme(legend.position = 'bottom', legend.direction = "horizontal")
 ```
+
+The intertidal masks were digitised according to the seagrass areas reported in @sousa2019. 
 
 # ICE CREAMS Model prediction
 
@@ -308,7 +319,7 @@ pal.spc <- colorNumeric(c('white','darkgreen'), domain = c(20, 100), na.color = 
 #| message: false
 #| warning: false
 
-pal.unc <- colorNumeric(c('#9fc8c8','#54a1a1','#1f6f6f'), domain = c(0, 1), na.color = "transparent")
+pal.unc <- colorNumeric(viridis_pal(option = 'D')(100), domain = c(0, 1), na.color = "transparent")
 ```
 
 ```{r icecreamscombinedmap}
@@ -444,7 +455,7 @@ carbon.tgc <- s2map_to_stock(map.tgc) / 1000000
 max.carbon <- global(map.tgc, fun = 'max', na.rm = TRUE) %>%
   unlist() %>%
   round()
-pal.carbon <- colorNumeric(c('ivory','black'), domain = c(0, max.carbon), na.color = 'transparent')
+pal.carbon <- colorNumeric(viridis_pal(option = 'G', direction = -1)(100), domain = c(0, max.carbon), na.color = 'transparent')
 ```
 
 ```{r mapbiomass}
@@ -460,17 +471,17 @@ m.biomass <- leaflet() %>%
   addRasterImage(map.ndvi, colors = pal.ndvi, group = 'NDVI') %>%
   addLegend_decreasing(position = 'bottomleft', pal = pal.ndvi, values = c(0.2, 1), opacity = 1, decreasing = TRUE, group = 'Legend: NDVI') %>%
   # AGB map
-  addRasterImage(map.agb, colors = pal.biomass, group = 'Leaf biomass') %>%
+  addRasterImage(map.agb, colors = pal.biomass, group = 'Aboveground biomass') %>%
   addLegend_decreasing(position = 'bottomleft', pal = pal.biomass, values = c(0, max.biomass), opacity = 1, decreasing = TRUE, group = 'Legend: Biomass (g DW/m<sup>2</sup>)') %>%
   # BGB map
-  addRasterImage(map.bgb, colors = pal.biomass, group = 'Root biomass') %>%
+  addRasterImage(map.bgb, colors = pal.biomass, group = 'Belowground biomass') %>%
   # TGB map
   addRasterImage(map.tgb, colors = pal.biomass, group = 'Total biomass') %>%
   # AGC map
-  addRasterImage(map.agc, colors = pal.carbon, group = 'Leaf carbon') %>%
+  addRasterImage(map.agc, colors = pal.carbon, group = 'Aboveground carbon') %>%
   addLegend_decreasing(position = 'bottomleft', pal = pal.carbon, values = c(0, max.carbon), opacity = 1, decreasing = TRUE, group = 'Legend: Carbon (g C/m<sup>2</sup>)') %>%
   # BGC map
-  addRasterImage(map.bgc, colors = pal.carbon, group = 'Root carbon') %>%
+  addRasterImage(map.bgc, colors = pal.carbon, group = 'Belowground carbon') %>%
   # TGC map
   addRasterImage(map.tgc, colors = pal.carbon, group = 'Total carbon') %>%
   # outline of natural & rewilded sites
@@ -478,7 +489,7 @@ m.biomass <- leaflet() %>%
   addLegend(position = 'bottomleft', colors = c('darkred','darkgreen'), values = c('rewilded', 'natural'), labels = c('Rewilded', 'Natural'), group = 'Sample sites') %>%
   # layer control
   addLayersControl(
-    baseGroups = c('NDVI', 'Leaf biomass', 'Root biomass', 'Total biomass', 'Leaf carbon', 'Root carbon', 'Total carbon'),
+    baseGroups = c('NDVI', 'Aboveground biomass', 'Belowground biomass', 'Total biomass', 'Aboveground carbon', 'Belowground carbon', 'Total carbon'),
     overlayGroups = c('Sample sites', 'Legend: NDVI', 'Legend: Biomass (g DW/m<sup>2</sup>)', 'Legend: Carbon (g C/m<sup>2</sup>)'),
     options = layersControlOptions(collapsed = FALSE)
   ) %>%
@@ -500,12 +511,12 @@ mean_sd_pixel <- function(map) {
   mean.pixel <- map %>%
     global(fun = 'mean', na.rm = TRUE) %>%
     unlist() %>%
-    round(2)
+    round(1)
   
   sd.pixel <- map %>%
     global(fun = 'sd', na.rm = TRUE) %>%
     unlist() %>%
-    round(2)
+    round(1)
   
   return(paste(mean.pixel, '\u00B1', sd.pixel))
 }
@@ -513,20 +524,20 @@ mean_sd_pixel <- function(map) {
 table.bc <- data.frame(
     list(
       "component" = c('Aboveground', 'Belowground', 'Soil','Total'),
-      "extent" = rep(area.seagrass, 4) %>% unlist(),
+      "extent" = rep(round(area.seagrass/10000, 1), 4) %>% unlist(),
       "biomass_per_area" = c(mean_sd_pixel(map.agb), mean_sd_pixel(map.bgb), 'NA', mean_sd_pixel(map.tgb)),
-      "biomass" = c(round(biomass.agb, 2), round(biomass.bgb, 2), 'NA', round(biomass.tgb, 2)),
-      "carbon_content" = c(round(aveiro.carbon.leaf.factor, 3), round(aveiro.carbon.root.factor, 3), 'NA', 'NA'),
+      "biomass" = c(round(biomass.agb, 1), round(biomass.bgb, 1), 'NA', round(biomass.tgb, 1)),
+      "carbon_content" = c(round(aveiro.carbon.leaf.factor*100, 1), round(aveiro.carbon.root.factor*100, 1), 'NA', 'NA'),
       "carbon_per_area" = c(mean_sd_pixel(map.agc), mean_sd_pixel(map.bgc), sousa.soil.mean, mean_sd_pixel(map.tgc)),
-      "carbon_stock" = c(round(carbon.agc, 3), round(carbon.bgc, 3), format(carbon.soil, scientific = FALSE), round(carbon.agc + carbon.bgc + carbon.soil, 3))
+      "carbon_stock" = c(round(carbon.agc, 1), round(carbon.bgc, 1), format(carbon.soil, scientific = FALSE), round(carbon.agc + carbon.bgc + carbon.soil, 1))
     )) 
 
-names(table.bc) <- c("Component", "Total seagrass extent<br>(m^2^)", "Mean biomass per area<br>(g DW/m^2^)", "Total biomass<br>(Mg DW)", "Carbon content<br>(g C/g DW)", "Mean carbon stock per area<br>(g C/m^2^)", "Total carbon stock<br>(Mg C)")
+names(table.bc) <- c("Component", "Total seagrass extent<br>(ha)", "Mean biomass per area<br>(g DW/m^2^)", "Total biomass<br>(Mg DW)", "Carbon content<br>(% g C/g DW)", "Mean carbon stock per area<br>(g C/m^2^)", "Total carbon stock<br>(Mg C)")
 
 knitr::kable(table.bc, 
              format = "pipe",
              align = 'c',
-             caption = 'Seagrass biomass and carbon at Ria de Aveiro. "DW" denotes the dry weight of the seagrass samples while "C" denotes the carbon in the seagrass samples. The mean monthly soil carbon stock per area reported in Sousa et al. is included in the total carbon estimates.')
+             caption = 'Seagrass biomass and carbon at Ria de Aveiro. "DW" denotes the dry weight of the seagrass samples while "C" denotes the carbon in the seagrass samples. The total carbon estimate included the aboveground carbon estimate, belowground carbon estimate and the soil carbon estimate. The soil carbon estimate was extracted from the mean monthly soil carbon stock per area reported in @sousa2019, which was based on the top 10 cm sediment layer.')
 ```
 
 # Seasonal change in seagrass biomass
@@ -606,7 +617,7 @@ for (n in phenology$tile.name) {
 #| message: false
 #| warning: false
 #| fig.width: 10
-#| fig.cap: Predicted biomass and carbon values of the aboveground, belowground and total components of the seagrass meadows in Ria de Aveiro in the years 2024 and 2025. The mean monthly soil carbon stock per area from Sousa et al. was included in the total carbon estimate.
+#| fig.cap: Predicted biomass and carbon values of the aboveground, belowground and total components of the seagrass meadows in Ria de Aveiro in the years 2024 and 2025. The total carbon estimate included the aboveground carbon estimate, belowground carbon estimate and the soil carbon estimate. The soil carbon estimate was extracted from the mean monthly soil carbon stock per area reported in @sousa2019, which was based on the top 10 cm sediment layer.
 
 phenology.longer <- phenology %>%
   pivot_longer(contains("_"), names_to = c('component', 'material', 'scale'), names_sep = "_")
@@ -614,10 +625,11 @@ phenology.longer <- phenology %>%
 phenology.longer$material <- factor(phenology.longer$material, labels =  c('b' = 'Biomass', 'c' = 'Carbon'))
 phenology.longer$scale <- factor(phenology.longer$scale, labels =  c('perArea' = "Mean~pixel~value~(g/m^{2})", 'total' = "Total~(Mg)"))
 
-ggplot(phenology.longer, aes(x = date, y = value, colour = component)) +
-  geom_line(linewidth = 1) +
+ggplot(phenology.longer, aes(x = daymonth, y = value, colour = component)) +
+  geom_smooth() + 
+  geom_point() +
   xlab('Date') + ylab('Value (See grid labels for units)') +
-  scale_colour_discrete('Component', labels = c('ag' = 'Aboveground', 'bg' = 'Belowground', 'tg' = 'Total')) +
+  scale_colour_viridis_d('Component', labels = c('ag' = 'Aboveground', 'bg' = 'Belowground', 'tg' = 'Total'), option = "D", direction = -1) +
   facet_grid(scale ~ material, scales = 'free', labeller = label_parsed)
 ```
 
