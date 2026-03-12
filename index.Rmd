@@ -3,6 +3,7 @@ title: "Predicted seagrass carbon map at Ria de Aveiro for 2024 and 2025"
 author: "Lee, Chengfa Benjamin"
 date: "`r Sys.Date()`"
 output: bookdown::html_document2
+# output: powerpoint_presentation
 bibliography: references.bib 
 editor_options:
   chunk_output_type: inline
@@ -26,6 +27,8 @@ This page documents the results of the _Zostera noltii_ seagrass carbon mapping 
 * [The fieldtrip of Aveiro 2025](https://sigoiry.github.io/Spectra_Aveiro_2025/) by [Simon Oiry](https://github.com/SigOiry)
 * [Coring Carbon Seagrass](https://sigoiry.github.io/Coring_Carbon_Seagrasses/) by Simon Oiry
 * [Exploring the relationship between seagrass reflectance and biomass](https://leechengfa.github.io/Seagrass_reflectance_biomass_2025.github.io/)
+* [Measuring the carbon content in _Zostera noltii_ seagrass](https://leechengfa.github.io/seagrass_carbon_2025/)
+
 
 All analyses were performed in R version 4.5.2 [@Rversion].
 All work belong to the [REWRITE project](https://rewriteproject.eu/).
@@ -151,7 +154,7 @@ ggplot(phenology, aes(x = daymonth, y = ndvi.mean, colour = NA)) +
   theme(legend.position = 'bottom', legend.direction = "horizontal")
 ```
 
-The intertidal masks were digitised according to the seagrass areas reported in @sousa2019. 
+The intertidal masks were digitised using QGIS according to the published maps detailing the seagrass areas A to P reported in @sousa2019. An additional polygon for the rewilded island was included in the mask.
 
 # ICE CREAMS Model prediction
 
@@ -438,8 +441,8 @@ area.seagrass <- map.class.seagrass$Out_Class %>%
   noNA() %>%
   s2map_to_stock()
 
-# based on Ana Sousa's paper that the mean annual seagrass soil carbon in the top 10 cm is 162 g C/m2
-sousa.soil.mean <- 162.8
+# based on Ana Sousa's paper that the mean annual seagrass soil carbon in the top 10 cm is 162 g C/m2; mean monthly soil carbon for July 2025 is 150 g C/m2
+sousa.soil.mean <- 150.8
 carbon.soil <- sousa.soil.mean * area.seagrass / 1000000
 
 map.tgc <- map.agc + map.bgc + sousa.soil.mean
@@ -494,7 +497,7 @@ m.biomass <- leaflet() %>%
     options = layersControlOptions(collapsed = FALSE)
   ) %>%
   hideGroup(c('NDVI', 'Legend: NDVI', 'Legend: Carbon (g C/m<sup>2</sup>)')) %>%
-  showGroup('Leaf biomass')
+  showGroup('Aboveground biomass')
 m.biomass
 ```
 
@@ -529,7 +532,7 @@ table.bc <- data.frame(
       "biomass" = c(round(biomass.agb, 1), round(biomass.bgb, 1), 'NA', round(biomass.tgb, 1)),
       "carbon_content" = c(round(aveiro.carbon.leaf.factor*100, 1), round(aveiro.carbon.root.factor*100, 1), 'NA', 'NA'),
       "carbon_per_area" = c(mean_sd_pixel(map.agc), mean_sd_pixel(map.bgc), sousa.soil.mean, mean_sd_pixel(map.tgc)),
-      "carbon_stock" = c(round(carbon.agc, 1), round(carbon.bgc, 1), format(carbon.soil, scientific = FALSE), round(carbon.agc + carbon.bgc + carbon.soil, 1))
+      "carbon_stock" = c(round(carbon.agc, 1), round(carbon.bgc, 1), round(carbon.soil, 1), round(carbon.agc + carbon.bgc + carbon.soil, 1))
     )) 
 
 names(table.bc) <- c("Component", "Total seagrass extent<br>(ha)", "Mean biomass per area<br>(g DW/m^2^)", "Total biomass<br>(Mg DW)", "Carbon content<br>(% g C/g DW)", "Mean carbon stock per area<br>(g C/m^2^)", "Total carbon stock<br>(Mg C)")
@@ -537,7 +540,7 @@ names(table.bc) <- c("Component", "Total seagrass extent<br>(ha)", "Mean biomass
 knitr::kable(table.bc, 
              format = "pipe",
              align = 'c',
-             caption = 'Seagrass biomass and carbon at Ria de Aveiro. "DW" denotes the dry weight of the seagrass samples while "C" denotes the carbon in the seagrass samples. The total carbon estimate included the aboveground carbon estimate, belowground carbon estimate and the soil carbon estimate. The soil carbon estimate was extracted from the mean monthly soil carbon stock per area reported in @sousa2019, which was based on the top 10 cm sediment layer.')
+             caption = 'Seagrass biomass and carbon at Ria de Aveiro. "DW" denotes the dry weight of the seagrass samples while "C" denotes the carbon in the seagrass samples. The total carbon estimate included the aboveground carbon estimate, belowground carbon estimate and the soil carbon estimate. The soil carbon estimate was extracted from the soil carbon stock per area for July 2025 reported in @sousa2019, which was based on the top 10 cm sediment layer.')
 ```
 
 # Seasonal change in seagrass biomass
@@ -617,21 +620,39 @@ for (n in phenology$tile.name) {
 #| message: false
 #| warning: false
 #| fig.width: 10
-#| fig.cap: Predicted biomass and carbon values of the aboveground, belowground and total components of the seagrass meadows in Ria de Aveiro in the years 2024 and 2025. The total carbon estimate included the aboveground carbon estimate, belowground carbon estimate and the soil carbon estimate. The soil carbon estimate was extracted from the mean monthly soil carbon stock per area reported in @sousa2019, which was based on the top 10 cm sediment layer.
+#| fig.cap: Predicted biomass values of the aboveground, belowground and total components of the seagrass meadows in Ria de Aveiro in the years 2024 and 2025.
 
 phenology.longer <- phenology %>%
   pivot_longer(contains("_"), names_to = c('component', 'material', 'scale'), names_sep = "_")
 
 phenology.longer$material <- factor(phenology.longer$material, labels =  c('b' = 'Biomass', 'c' = 'Carbon'))
 phenology.longer$scale <- factor(phenology.longer$scale, labels =  c('perArea' = "Mean~pixel~value~(g/m^{2})", 'total' = "Total~(Mg)"))
+phenology.longer$component <- factor(phenology.longer$component, labels = c('ag' = 'Aboveground', 'bg' = 'Belowground', 'tg' = 'Total'))
 
-ggplot(phenology.longer, aes(x = daymonth, y = value, colour = component)) +
+ggplot(phenology.longer %>% filter(material == 'Biomass'), aes(x = daymonth, y = value, colour = component)) +
   geom_smooth() + 
   geom_point() +
   xlab('Date') + ylab('Value (See grid labels for units)') +
   scale_colour_viridis_d('Component', labels = c('ag' = 'Aboveground', 'bg' = 'Belowground', 'tg' = 'Total'), option = "D", direction = -1) +
-  facet_grid(scale ~ material, scales = 'free', labeller = label_parsed)
+  scale_x_date(breaks = '1 month', date_labels = '%d %b') + 
+  facet_grid(scale ~ ., scales = 'free', labeller = label_parsed)
 ```
 
+```{r phenologycarbongraph}
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+#| fig.width: 10
+#| fig.cap: Predicted carbon values of the aboveground and belowground components of the seagrass meadows in Ria de Aveiro in the years 2024 and 2025. The total carbon estimate included the aboveground carbon estimate, belowground carbon estimate and the soil carbon estimate. The soil carbon estimate was extracted from the soil carbon stock per area for July 2025 reported in @sousa2019, which was based on the top 10 cm sediment layer.
+
+ggplot(phenology.longer %>% filter(material == 'Carbon'), aes(x = daymonth, y = value, colour = component)) +
+  geom_smooth() + 
+  geom_point() +
+  xlab('Date') + ylab('Value (See grid labels for units)') +
+  scale_colour_viridis_d('Component', option = "D", direction = -1) +
+  scale_x_date(breaks = '3 month', date_labels = '%d %b') + 
+  facet_wrap(scale ~ component, scales = 'free', labeller = label_parsed)
+```
 
 # Reference
